@@ -12,33 +12,92 @@ var connection = mysql.createConnection({
 
   // Your password
   password: "1steger1",
-  database: "icecream_DB"
+  database: "bamazon"
 });
 
-connection.connect(function(err) {
+connection.connect(function (err) {
   if (err) throw err;
-  console.log("connected as id " + connection.threadId + "\n");
-  // createProduct();
+  displayProducts();
 });
 
-function displayItems() {
-  connection.query(
-    "SELECT item_id, product_name, price, stock_quantity from products where stock_quantity>0",
-    function(err, res) {
-      if (err) throw err;
-      console.log("Id \t Name \t Price \t Quantity\n");
-      for (var i = 0; i < res.length; i++) {
-        console.log(
-          res[i].item_id + "\t" +
-          res[i].product_name + "\t" +
-          res[i].price + "\t" +
-          res[i].stock_quantity + "\n"
-        );
-        
-      }
-      displayQuestions(res.length);
+function displayProducts() {
+  console.log("Selecting all products...\n");
+  connection.query("SELECT * FROM products", function (err, res) {
+    if (err) throw err;
+    // Log all results of the SELECT statement
+    console.log("Available Products: ");
+    for (i = 0; i < res.length; i++) {
+      console.log(
+        " + Product ID: " +
+        res[i].item_id +
+        " + Product Name: " +
+        res[i].product_name +
+        " || Price: " +
+        res[i].price
+      );
     }
-  )
+    buyProduct();
+  });
 }
 
-displayItems();
+function buyProduct() {
+  inquirer
+    .prompt([
+      {
+        name: "id",
+        type: "input",
+        message: "Enter the id of the product you'd like to buy: ",
+        validate: function (value) {
+          if (isNaN(value) === false) {
+            return true;
+          }
+          return false;
+        }
+      },
+      {
+        name: "quantity",
+        type: "input",
+        message: "Enter the quantity you wish to purchase: ",
+        validate: function (value) {
+          if (isNaN(value) === false) {
+            return true;
+          }
+          return false;
+        }
+      }
+    ])
+    .then(function (answer) {
+      var query = "SELECT item_id, stock_quantity, price FROM products WHERE item_id = " + answer.id;
+      connection.query(query, function (err, res) {
+        if (err) throw err;
+        //if the user selected a quantity greater than the stock_quantity value:
+        if (res[0].stock_quantity - answer.quantity < 0) {
+          console.log("Insufficient Quantity! Please modify your order");
+          buyProduct();
+        } else {
+          var originalQty = res[0].stock_quantity;
+          fulfillOrder(answer.id, answer.quantity, originalQty);
+        }
+      });
+    });
+}
+
+function fulfillOrder(id, orderQty, originalQty) {
+  var query = connection.query(
+    "UPDATE products SET ? WHERE ?",
+    [
+      {
+        stock_quantity: originalQty - orderQty
+      },
+      {
+        item_id: id
+      }
+    ],
+    function (err, res) {
+      if (err) throw err;
+      console.log(res.affectedRows + " product(s) updated\n");
+    }
+  );
+  connection.end();
+
+}
